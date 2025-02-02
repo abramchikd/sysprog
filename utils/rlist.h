@@ -40,7 +40,7 @@ struct rlist {
 };
 
 /**
- * init list head (or list entry as ins't included in list)
+ * init list head (or list entry as isn't included in list)
  */
 static inline void
 rlist_create(struct rlist *list)
