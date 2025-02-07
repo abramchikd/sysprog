@@ -215,14 +215,16 @@ coro_bus_channel_close(struct coro_bus *bus, int channel)
 		return;
 	}
 
-	free(bus->channels[channel]->data.data);
+    struct coro_bus_channel *removed_channel = bus->channels[channel];
+    bus->channels[channel] = NULL;
 
 	coro_bus_errno_set(CORO_BUS_ERR_NO_CHANNEL);
-	wakeup_queue_wakeup_all(&bus->channels[channel]->recv_queue);
-	wakeup_queue_wakeup_all(&bus->channels[channel]->send_queue);
+	wakeup_queue_wakeup_all(&removed_channel->recv_queue);
+	wakeup_queue_wakeup_all(&removed_channel->send_queue);
+    coro_yield();
 
-	free(bus->channels[channel]);
-	bus->channels[channel] = NULL;
+    free(removed_channel->data.data);
+	free(removed_channel);
 }
 
 int
