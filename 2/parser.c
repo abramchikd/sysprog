@@ -63,13 +63,15 @@ token_reset(struct token *t)
 static void
 command_append_arg(struct command *cmd, char *arg)
 {
-	if (cmd->arg_count == cmd->arg_capacity) {
-		cmd->arg_capacity = (cmd->arg_capacity + 1) * 2;
+	if (cmd->arg_count + 1 >= cmd->arg_capacity) {
+		cmd->arg_capacity = (cmd->arg_capacity + 2) * 2;
 		cmd->args = realloc(cmd->args, sizeof(*cmd->args) * cmd->arg_capacity);
 	} else {
-		assert(cmd->arg_count < cmd->arg_capacity);
+		assert(cmd->arg_count + 1 <= cmd->arg_capacity);
 	}
+
 	cmd->args[cmd->arg_count++] = arg;
+	cmd->args[cmd->arg_count + 1] = NULL;
 }
 
 void
@@ -309,6 +311,7 @@ parser_pop_next(struct parser *p, struct command_line **out)
 			e = calloc(1, sizeof(*e));
 			e->type = EXPR_TYPE_COMMAND;
 			e->cmd.exe = token_strdup(&token);
+			command_append_arg(&e->cmd, token_strdup(&token));
 			command_line_append(line, e);
 			continue;
 		case TOKEN_TYPE_NEW_LINE:
