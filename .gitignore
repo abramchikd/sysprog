@@ -1,3 +1,5 @@
 /.idea
 /.vscode
 /*/test
+/.venv
+*/__pycache__
