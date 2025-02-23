@@ -38,10 +38,10 @@ static bool
 is_end_expression(const struct expr *e);
 
 static void
-exec_cmd(const struct command *cmd, struct process_collection *collection);
+exec_cmd(const struct command *cmd, struct process_collection *collection, int last_out);
 
 static int
-run_fork(const struct command *cmd, int in, int out_pipe[]);
+run_fork(const struct command *cmd, int in, int out_pipe[], int last_out);
 
 static void
 process_collection_append(struct process_collection *collection, const struct process *process)
@@ -126,6 +126,7 @@ execute_part(const struct command_line *line, struct expr **e_start)
 {
 	struct process_collection collection = {NULL, 0, 0};
 
+	int out_file = -1;
 	struct expr *e = *e_start;
 	while (e != NULL) {
 		if (e->type == EXPR_TYPE_PIPE) {
@@ -144,29 +145,21 @@ execute_part(const struct command_line *line, struct expr **e_start)
 		}
 
 		if (strcmp(e->cmd.exe, "exit") == 0 && collection.size == 0 && is_end_expression(e->next)) {
+			free(collection.processes);
 			exit(e->cmd.arg_count == 1 ? 0 : atoi(e->cmd.args[1]));
 		}
 
-		exec_cmd(&e->cmd, &collection);
+		if (is_end_expression(e->next)) {
+			out_file = create_out_descriptor(line);
+		}
+
+		exec_cmd(
+			&e->cmd,
+			&collection,
+			out_file
+		);
+
 		e = e->next;
-	}
-
-	if (collection.size != 0) {
-		int file = create_out_descriptor(line);
-		int in = collection.processes[collection.size -1].out_pipe[STDIN_FILENO];
-		char buffer[255];
-		ssize_t size;
-		while ((size = read(in, buffer, 255)) != 0) {
-			write(file, buffer, size);
-		}
-
-		if (file != STDOUT_FILENO) {
-			close(file);
-		}
-	}
-
-	if (collection.size != 0) {
-		close(collection.processes[collection.size -1].out_pipe[STDIN_FILENO]);
 	}
 
 	int exit_code = 0;
@@ -183,6 +176,12 @@ execute_part(const struct command_line *line, struct expr **e_start)
 		}
 	}
 
+	if (out_file != -1 && out_file != STDOUT_FILENO) {
+		close(out_file);
+	}
+
+	free(collection.processes);
+
 	*e_start = e;
 	return exit_code;
 }
@@ -194,25 +193,34 @@ is_end_expression(const struct expr *e)
 }
 
 static void
-exec_cmd(const struct command *cmd, struct process_collection *collection)
+exec_cmd(const struct command *cmd, struct process_collection *collection, int last_out)
 {
 	struct process proc;
-	pipe(proc.out_pipe);
+
+	if (last_out == -1) {
+		pipe(proc.out_pipe);
+	} else {
+		proc.out_pipe[STDIN_FILENO] = -1;
+		proc.out_pipe[STDOUT_FILENO] = -1;
+	}
 
 	if (strcmp(cmd->exe, "exit") != 0) {
 		proc.pid = run_fork(
 			cmd,
 			collection->size == 0 ? STDIN_FILENO : collection->processes[collection->size - 1].out_pipe[STDIN_FILENO],
-			proc.out_pipe
+			proc.out_pipe,
+			last_out
 		);
 	} else {
 		proc.pid = -1;
 		proc.exit_code = cmd->arg_count == 1 ? 0 : atoi(cmd->args[1]);
 	}
 
-	close(proc.out_pipe[STDOUT_FILENO]);
+	if (proc.out_pipe[STDOUT_FILENO] != -1) {
+		close(proc.out_pipe[STDOUT_FILENO]);
+	}
 
-	if (collection->size != 0) {
+	if (collection->size != 0 && collection->processes[collection->size - 1].out_pipe[STDIN_FILENO] != -1) {
 		close(collection->processes[collection->size - 1].out_pipe[STDIN_FILENO]);
 	}
 
@@ -220,7 +228,7 @@ exec_cmd(const struct command *cmd, struct process_collection *collection)
 }
 
 static int
-run_fork(const struct command *cmd, int in, int out_pipe[])
+run_fork(const struct command *cmd, int in, int out_pipe[], int last_out)
 {
 	pid_t pid = fork();
 	if (pid != 0) {
@@ -232,9 +240,16 @@ run_fork(const struct command *cmd, int in, int out_pipe[])
 		close(in);
 	}
 
-	dup2(out_pipe[STDOUT_FILENO], STDOUT_FILENO);
-	close(out_pipe[STDOUT_FILENO]);
-	close(out_pipe[STDIN_FILENO]);
+	if (last_out == -1) {
+		dup2(out_pipe[STDOUT_FILENO], STDOUT_FILENO);
+		close(out_pipe[STDOUT_FILENO]);
+		close(out_pipe[STDIN_FILENO]);
+	} else {
+		if (last_out != STDOUT_FILENO) {
+			dup2(last_out, STDOUT_FILENO);
+			close(last_out);
+		}
+	}
 
 	execvp(cmd->exe, cmd->args);
 	return 0;
