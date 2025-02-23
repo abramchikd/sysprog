@@ -58,11 +58,21 @@ process_collection_append(struct process_collection *collection, const struct pr
 int
 execute_command_line(const struct command_line *line)
 {
+	bool is_forked = false;
+	if (line->is_background) {
+		if (fork() != 0) {
+			return 0;
+		}
+
+		is_forked = true;
+	}
+
 	struct expr *e_start = line->head;
+	int res;
 	for (;;) {
-		int res = execute_part(line, &e_start);
+		res = execute_part(line, &e_start);
 		if (e_start == NULL) {
-			return res;
+			break;
 		}
 
 		if (e_start->type == EXPR_TYPE_AND) {
@@ -71,7 +81,7 @@ execute_command_line(const struct command_line *line)
 				continue;
 			}
 
-			return res;
+			break;
 		}
 
 		if (e_start->type == EXPR_TYPE_OR) {
@@ -82,7 +92,7 @@ execute_command_line(const struct command_line *line)
 
 			skip_or(&e_start);
 			if (e_start == NULL) {
-				return res;
+				break;
 			}
 
 			continue;
@@ -90,6 +100,12 @@ execute_command_line(const struct command_line *line)
 
 		assert(false);
 	}
+
+	if (is_forked) {
+		exit(res);
+	}
+
+	return res;
 }
 
 static void
@@ -233,12 +249,7 @@ create_out_descriptor(const struct command_line *line)
 	}
 
 	if (line->out_type == OUTPUT_TYPE_FILE_NEW) {
-		struct stat status;
-		if (stat(line->out_file, &status) == 0) {
-			unlink(line->out_file);
-		}
-
-		file = open(line->out_file, O_WRONLY | O_CREAT, 0000644);
+		file = open(line->out_file, O_WRONLY | O_CREAT | O_TRUNC, 0000644);
 		if (file == -1) {
 			write(1, "Error", 6);
 		}
