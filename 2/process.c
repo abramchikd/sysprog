@@ -12,6 +12,7 @@ struct process
 {
 	pid_t pid;
 	int out_pipe[2];
+	int exit_code;
 };
 
 struct process_collection
@@ -125,8 +126,6 @@ execute_part(const struct command_line *line, struct expr **e_start)
 {
 	struct process_collection collection = {NULL, 0, 0};
 
-	bool has_exit = false;
-	int exit_code = 0;
 	struct expr *e = *e_start;
 	while (e != NULL) {
 		if (e->type == EXPR_TYPE_PIPE) {
@@ -144,19 +143,11 @@ execute_part(const struct command_line *line, struct expr **e_start)
 			continue;
 		}
 
-		if (strcmp(e->cmd.exe, "exit") == 0) {
-			exit_code = e->cmd.arg_count == 1 ? 0 : atoi(e->cmd.args[1]);
-			if (collection.size == 0 && is_end_expression(e->next)) {
-				exit(exit_code);
-			}
-
-			has_exit = collection.size != 0;
-			e = e->next;
-			continue;
+		if (strcmp(e->cmd.exe, "exit") == 0 && collection.size == 0 && is_end_expression(e->next)) {
+			exit(e->cmd.arg_count == 1 ? 0 : atoi(e->cmd.args[1]));
 		}
 
 		exec_cmd(&e->cmd, &collection);
-		exit_code = 0;
 		e = e->next;
 	}
 
@@ -166,9 +157,7 @@ execute_part(const struct command_line *line, struct expr **e_start)
 		char buffer[255];
 		ssize_t size;
 		while ((size = read(in, buffer, 255)) != 0) {
-			if (!has_exit) {
-				write(file, buffer, size);
-			}
+			write(file, buffer, size);
 		}
 
 		if (file != STDOUT_FILENO) {
@@ -180,7 +169,13 @@ execute_part(const struct command_line *line, struct expr **e_start)
 		close(collection.processes[collection.size -1].out_pipe[STDIN_FILENO]);
 	}
 
+	int exit_code = 0;
 	for (int i = 0; i < collection.size; i++) {
+		if (collection.processes[i].pid == -1) {
+			exit_code = collection.processes[i].exit_code;
+			continue;
+		}
+
 		int status;
 		waitpid(collection.processes[i].pid, &status, 0);
 		if (!WIFEXITED(status) || WEXITSTATUS(status)) {
@@ -204,11 +199,16 @@ exec_cmd(const struct command *cmd, struct process_collection *collection)
 	struct process proc;
 	pipe(proc.out_pipe);
 
-	proc.pid = run_fork(
-		cmd,
-		collection->size == 0 ? STDIN_FILENO : collection->processes[collection->size - 1].out_pipe[STDIN_FILENO],
-		proc.out_pipe
-	);
+	if (strcmp(cmd->exe, "exit") != 0) {
+		proc.pid = run_fork(
+			cmd,
+			collection->size == 0 ? STDIN_FILENO : collection->processes[collection->size - 1].out_pipe[STDIN_FILENO],
+			proc.out_pipe
+		);
+	} else {
+		proc.pid = -1;
+		proc.exit_code = cmd->arg_count == 1 ? 0 : atoi(cmd->args[1]);
+	}
 
 	close(proc.out_pipe[STDOUT_FILENO]);
 
