@@ -366,6 +366,10 @@ ufs_delete(const char *filename)
 	} else {
 		file->prev->next = file->next;
 		file->next->prev = file->prev;
+
+        if (file_list == file) {
+            file_list = file->next;
+        }
 	}
 
 	file->descriptors_count--;
