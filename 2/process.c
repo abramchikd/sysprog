@@ -61,8 +61,15 @@ execute_command_line(const struct command_line *line)
 {
 	bool is_forked = false;
 	if (line->is_background) {
-		if (fork() != 0) {
+		int pid = fork();
+		if (pid != 0) {
+			int status;
+			waitpid(pid, &status, 0);
 			return 0;
+		}
+
+		if (fork() != 0) {
+			 exit(0);
 		}
 
 		is_forked = true;
@@ -150,7 +157,7 @@ execute_part(const struct command_line *line, struct expr **e_start)
 		}
 
 		if (is_end_expression(e->next)) {
-			out_file = create_out_descriptor(line);
+			out_file = e->next == NULL ? create_out_descriptor(line) : STDOUT_FILENO;
 		}
 
 		exec_cmd(
@@ -171,9 +178,7 @@ execute_part(const struct command_line *line, struct expr **e_start)
 
 		int status;
 		waitpid(collection.processes[i].pid, &status, 0);
-		if (!WIFEXITED(status) || WEXITSTATUS(status)) {
-			exit_code = WEXITSTATUS(status);
-		}
+		exit_code = WEXITSTATUS(status);
 	}
 
 	if (out_file != -1 && out_file != STDOUT_FILENO) {
