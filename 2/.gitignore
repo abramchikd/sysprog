@@ -1,2 +1,5 @@
 mybash
 /testdir
+output_expected.txt
+output_got.txt
+tmp.txt
