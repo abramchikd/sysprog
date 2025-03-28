@@ -91,7 +91,8 @@ thread_pool_delete(struct thread_pool *pool)
 	pthread_cond_destroy(&pool->tasks_cv);
 	pthread_cond_destroy(&pool->ready_tasks_cv);
 
-	free(pool);
+	free(pool->threads);
+    free(pool);
 
 	return 0;
 }
@@ -285,7 +286,17 @@ thread_task_detach(struct thread_task *task)
 		return TPOOL_ERR_TASK_NOT_PUSHED;
 	}
 
-	task->is_detached = true;
+    pthread_mutex_t *mutex = &task->pool->tasks_mutex;
+
+    pthread_mutex_lock(mutex);
+    if (task->status == TPOOL_TASK_FINISHED) {
+        free(task);
+    } else {
+        task->is_detached = true;
+    }
+
+    pthread_mutex_unlock(mutex);
+
 	return 0;
 }
 
