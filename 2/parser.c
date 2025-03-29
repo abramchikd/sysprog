@@ -71,7 +71,7 @@ command_append_arg(struct command *cmd, char *arg)
 	}
 
 	cmd->args[cmd->arg_count++] = arg;
-	cmd->args[cmd->arg_count + 1] = NULL;
+	cmd->args[cmd->arg_count] = NULL;
 }
 
 void
