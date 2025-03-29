@@ -4,7 +4,6 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/wait.h>
-#include <sys/stat.h>
 #include <assert.h>
 #include <string.h>
 
