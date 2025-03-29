@@ -29,7 +29,7 @@ static void
 skip_or(struct expr **e);
 
 static int
-execute_part(const struct command_line *line, struct expr **e_start);
+execute_part(const struct command_line *line, struct expr **e_start, bool *need_exit);
 
 static int
 create_out_descriptor(const struct command_line *line);
@@ -57,7 +57,7 @@ process_collection_append(struct process_collection *collection, const struct pr
 }
 
 int
-execute_command_line(const struct command_line *line)
+execute_command_line(const struct command_line *line, bool *need_exit)
 {
 	bool is_forked = false;
 	if (line->is_background) {
@@ -69,7 +69,8 @@ execute_command_line(const struct command_line *line)
 		}
 
 		if (fork() != 0) {
-			 exit(0);
+			*need_exit = true;
+			return 0;
 		}
 
 		is_forked = true;
@@ -78,7 +79,11 @@ execute_command_line(const struct command_line *line)
 	struct expr *e_start = line->head;
 	int res;
 	for (;;) {
-		res = execute_part(line, &e_start);
+		res = execute_part(line, &e_start, need_exit);
+		if (*need_exit) {
+			return res;
+		}
+
 		if (e_start == NULL) {
 			break;
 		}
@@ -110,7 +115,7 @@ execute_command_line(const struct command_line *line)
 	}
 
 	if (is_forked) {
-		exit(res);
+		*need_exit = true;
 	}
 
 	return res;
@@ -129,7 +134,7 @@ skip_or(struct expr **e)
 }
 
 static int
-execute_part(const struct command_line *line, struct expr **e_start)
+execute_part(const struct command_line *line, struct expr **e_start, bool *need_exit)
 {
 	struct process_collection collection = {NULL, 0, 0};
 
@@ -153,7 +158,8 @@ execute_part(const struct command_line *line, struct expr **e_start)
 
 		if (strcmp(e->cmd.exe, "exit") == 0 && collection.size == 0 && is_end_expression(e->next)) {
 			free(collection.processes);
-			exit(e->cmd.arg_count == 1 ? 0 : atoi(e->cmd.args[1]));
+			*need_exit = true;
+			return e->cmd.arg_count == 1 ? 0 : atoi(e->cmd.args[1]);
 		}
 
 		if (is_end_expression(e->next)) {
