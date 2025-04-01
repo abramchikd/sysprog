@@ -58,7 +58,12 @@ thread_pool_new(int max_thread_count, struct thread_pool **pool)
 
 	pthread_mutex_init(&(*pool)->tasks_mutex, NULL);
 	pthread_cond_init(&(*pool)->tasks_cv, NULL);
-	pthread_cond_init(&(*pool)->ready_tasks_cv, NULL);
+
+	pthread_condattr_t attr;
+	pthread_condattr_init(&attr);
+	pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+	pthread_cond_init(&(*pool)->ready_tasks_cv, &attr);
+	pthread_condattr_destroy(&attr);
 
 	return 0;
 }
