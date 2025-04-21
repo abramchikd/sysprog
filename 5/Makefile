@@ -1,4 +1,4 @@
-GCC_FLAGS = -Wextra -Werror -Wall -Wno-gnu-folding-constant
+GCC_FLAGS = -Wextra -Werror -Wall -Wno-gnu-folding-constant -g
 
 all: lib exe test
 
@@ -14,6 +14,10 @@ exe: lib chat_client_exe.c chat_server_exe.c
 test: lib
 	gcc $(GCC_FLAGS) test.c chat.o chat_client.o chat_server.o -o test 	\
 		../utils/unit.c -I ../utils -lpthread
+
+heap:
+	gcc $(GCC_FLAGS) -ldl -rdynamic test.c chat.c chat_client.c chat_server.c ../utils/heap_help/heap_help.c -o test \
+		../utils/unit.c -I ../utils -lpthread -I ../utils/heap_help
 
 # For automatic testing systems to be able to just build whatever was submitted
 # by a student.

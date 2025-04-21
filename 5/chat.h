@@ -13,8 +13,11 @@
  * It is important to define these macros here, in the header, because it is
  * used by tests.
  */
-#define NEED_AUTHOR 0
-#define NEED_SERVER_FEED 0
+#include <stddef.h>
+#include <unistd.h>
+
+#define NEED_AUTHOR 1
+#define NEED_SERVER_FEED 1
 
 enum chat_errcode {
 	CHAT_ERR_INVALID_ARGUMENT = 1,
@@ -32,6 +35,12 @@ enum chat_events {
 	CHAT_EVENT_OUTPUT = 2,
 };
 
+enum message_status {
+	MESSAGE_STATUS_READING_AUTHOR,
+	MESSAGE_STATUS_READING_DATA,
+	MESSAGE_STATUS_READY
+};
+
 struct chat_message {
 #if NEED_AUTHOR
 	/** Author's name. */
@@ -39,8 +48,11 @@ struct chat_message {
 #endif
 	/** 0-terminate text. */
 	char *data;
+	ssize_t data_size;
+	ssize_t offset;
 
-	/* PUT HERE OTHER MEMBERS */
+	struct chat_message *next;
+	enum message_status status;
 };
 
 /** Free message's memory. */
